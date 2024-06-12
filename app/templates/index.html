@@ -21,7 +21,7 @@
             <button class="mb-4 bg-blue-500 text-white px-4 py-2 rounded">
                 Create New Snippet
             </button>
-            <ul>
+            <ul id="snippet-list">
                 <li class="flex justify-between mb-4">
                     <!-- Dark & no delete button because it is selected -->
                     <a class="w-full block p-2 bg-gray-500 rounded text-white" href="#">
@@ -45,19 +45,24 @@
             <h1 class="text-xl font-bold mb-4">
                 Code Snippet Generator
             </h1>
-            <textarea placeholder="Describe your code snippet here..."
+            <textarea id="description" placeholder="Describe your code snippet here..."
                 class="w-full p-2 border border-gray-300 rounded mb-4" rows="3"></textarea>
-            <button class="w-full bg-green-500 text-white px-4 py-2 rounded mb-4">
+            <select id="language" class="w-full p-2 border border-gray-300 rounded mb-4">
+                <option value="python">Python</option>
+                <option value="javascript">JavaScript</option>
+                <option value="ruby">Ruby</option>
+            </select>
+            <button id="generate-button" class="w-full bg-green-500 text-white px-4 py-2 rounded mb-4">
                 Generate Code
             </button>
 
             <!-- Simple Code Highlighter Placeholder for Python -->
-            <pre class="mb-2"><code class="python">def is_even(n):
+            <pre id="code-snippet" class="mb-2"><code class="python">def is_even(n):
     return n % 2</code></pre>
             <div class="flex justify-between mb-4">
-                <input type="text" placeholder="Provide feedback for regenerating code..."
+                <input id="feedback" type="text" placeholder="Provide feedback for regenerating code..."
                     class="flex-grow mr-2 p-2 border border-gray-300 rounded">
-                <button class="bg-blue-500 text-white px-4 py-2 rounded">
+                <button id="improve-code-button" class="bg-blue-500 text-white px-4 py-2 rounded">
                     Improve Code
                 </button>
             </div>
