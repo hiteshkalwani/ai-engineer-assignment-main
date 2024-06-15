@@ -22,25 +22,11 @@
             <h2 class="font-bold mb-4">
                 Snippets List
             </h2>
-            <button class="mb-4 bg-blue-500 text-white px-4 py-2 rounded">
+            <button id="create-snippet-button" class="mb-4 bg-blue-500 text-white px-4 py-2 rounded">
                 Create New Snippet
             </button>
             <ul id="snippet-list">
-                <li class="flex justify-between mb-4">
-                    <!-- Dark & no delete button because it is selected -->
-                    <a class="w-full block p-2 bg-gray-500 rounded text-white" href="#">
-                        Even Tester | Python
-                    </a>
-                </li>
-                <li class="flex justify-between mb-4">
-                    <a class="w-full block p-2 bg-gray-300 rounded" href="#">
-                        Prime number generator | Javascript
-                    </a>
-                    <!-- Delete icon -->
-                    <button class="bg-red-500 text-white px-2 py-1 rounded">
-                        Delete
-                    </button>
-                </li>
+                <!-- Snippets will be dynamically added here -->
             </ul>
         </div>
 
@@ -61,8 +47,8 @@
             </button>
 
             <!-- Simple Code Highlighter Placeholder for Python -->
-            <pre class="mb-2"><code id="code-snippet" class="python">def is_even(n):
-    return n % 2</code></pre>
+            <pre class="mb-2"><code id="code-snippet"></code></pre>
+            <div id="extra-section">
             <div class="flex justify-between mb-4">
                 <input id="feedback" type="text" placeholder="Provide feedback for regenerating code..."
                     class="flex-grow mr-2 p-2 border border-gray-300 rounded">
@@ -70,7 +56,7 @@
                     Improve Code
                 </button>
             </div>
-            <button id="generate-tests-button" class="w-full bg-purple-500 text-white px-4 py-2 rounded mb-4">
+            <button id="generate-tests-button" class="w-full bg-gray-500 text-white px-4 py-2 rounded mb-4" disabled>
                 Generate Test Cases
             </button>
 
@@ -90,19 +76,21 @@
             <button id="run-tests-button" class="w-full bg-gray-500 text-white px-4 py-2 rounded mb-4" disabled>
                 Run Test Code
             </button>
-            <div id="test-results" class="bg-green-300 p-4 rounded mb-4">
+            <div id="test-results" class="bg-white-300 p-4 rounded mb-4">
                 
             </div>
             <button id="regenerate-button" class="w-full bg-gray-500 text-white px-4 py-2 rounded mb-4" disabled>
-                Regenerate (Enabled when failed; Send failed feedback to Regenerate)
+                Regenerate
             </button>
+        </div>
+
             </div>
     </div>
 
     <!-- Include Highlight.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script>hljs.highlightAll();</script>
-    <script src="/static/js/app.js"></script>
+    <script type="module" src="/static/js/app.js"></script>
 </body>
 
 </html>
