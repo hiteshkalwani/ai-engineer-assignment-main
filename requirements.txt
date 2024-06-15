@@ -3,3 +3,4 @@ uvicorn[standard]
 openai
 jinja2
 black
+RestrictedPython

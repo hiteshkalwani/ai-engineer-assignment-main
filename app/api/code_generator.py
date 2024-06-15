@@ -1,5 +1,6 @@
+import traceback
 from fastapi import APIRouter, HTTPException
-from app.models import CodeRequest, FeedbackRequest, CodeTestsRequest, CodeTestsRunRequest
+from app.models import CodeRequest, FeedbackRequest, CodeTestsRequest, CodeTestsRunRequest, CodeTestsImproveRequest
 from app.core.config import client, setup_message
 
 # Define the router
@@ -8,27 +9,30 @@ router = APIRouter()
 
 @router.post("/generate_code", response_model=dict)
 async def generate_code(request: CodeRequest):
-    try:
-        message = {
-            'role': 'user',
-            'content': (f"Generate runnable {request.language} code snippet with comments "
-                        "and only return the runnable code snippet without any extra message, "
-                        f"for: {request.description}"),
-        }
-        response = client.chat.completions.create(
-            model='gpt-3.5-turbo',
-            messages=[setup_message, message]
-        )
+    if request.description.strip() != "":
+        try:
+            message = {
+                'role': 'user',
+                'content': (f"Generate runnable {request.language} code snippet (only function) with comments "
+                            "without any extra message, "
+                            f"for: {request.description}"),
+            }
+            response = client.chat.completions.create(
+                model='gpt-3.5-turbo',
+                messages=[setup_message, message]
+            )
 
-        code = response.choices[0].message.content.strip()
-        # Remove Markdown code block syntax
-        if code.startswith("```") and code.endswith("```"):
-            # Remove the first line (```language)
-            code = "\n".join(code.split("\n")[1:-1])
+            code = response.choices[0].message.content.strip()
+            # Remove Markdown code block syntax
+            if code.startswith("```") and code.endswith("```"):
+                # Remove the first line (```language)
+                code = "\n".join(code.split("\n")[1:-1])
 
-        return {"code": code}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            return {"code": code}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    return {"code": "Please provide the code snippet description!"}
 
 
 @router.post("/generate_tests", response_model=dict)
@@ -36,12 +40,13 @@ async def generate_tests(request: CodeTestsRequest):
     try:
         message = {
             'role': 'user',
-            'content': (f"Generate test cases for this {request.language} code snippet "
+            'content': (f"Generate only assert test cases for this {request.language} code snippet "
                         "and format would be differ as per the programming language. "
                         "for python programming language : `assert is_even(8) == True`, "
                         "for ruby programming language : `assert_equal false, is_even(5)`, "
                         "and for javascript language : `assert.isTrue(is_even(5))` "
                         "choose one test case format and generate minimum 5 test cases "
+                        "with only assert statements without any other statements or comments "
                         f"for code snippet:\n\n{request.code}"),
         }
         response = client.chat.completions.create(
@@ -55,29 +60,50 @@ async def generate_tests(request: CodeTestsRequest):
         raise HTTPException(status_code=500, detail=str(e))
     
 
-@router.post("/run_tests", response_model=dict)
-async def run_tests(request: CodeTestsRunRequest):
+@router.post("/improve_tests", response_model=dict)
+async def improve_tests(request: CodeTestsImproveRequest):
     try:
         message = {
             'role': 'user',
-            'content': (f"Run the provided test cases on {request.language} code snippet "
-                        "and if found any issue then return the issue otherwise write only `All tests passed successfully!`, "
-                        f"code :\n\n{request.code} \n\n And test cases:\n\n{request.test_cases}"),
+            'content': (f"Generate test cases for this {request.language} code snippet "
+                        "and format would be differ as per the programming language. "
+                        "for python programming language : `assert is_even(8) == True`, "
+                        "for ruby programming language : `assert_equal false, is_even(5)`, "
+                        "and for javascript language : `assert.isTrue(is_even(5))` "
+                        "choose one test case format and generate minimum 5 test cases "
+                        "with only assert statements without any other statements or comments "
+                        "also according to the feedback of previously generated test cases "
+                        f"improve the test cases: \n\n{request.test_cases}  \n\nfeedback : \n\n{request.test_feedback} "
+                        f"\n\nfor code snippet:\n\n{request.code}"),
         }
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[message]
         )
 
-        code_tests_result = response.choices[0].message.content.strip()
-
-        error = False
-        if code_tests_result != 'All tests passed successfully!':
-            error = True
-
-        return {"test_results": code_tests_result, "error": error}
+        improved_code_tests = response.choices[0].message.content.strip()
+        return {"code_tests": improved_code_tests}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/run_tests", response_model=dict)
+async def run_tests(request: CodeTestsRunRequest):
+    if request.language == 'python':
+        full_code = f"{request.code}\n{request.test_cases}"
+        try:
+            # Prepare a local dictionary to execute the code
+            local_vars = {}
+            exec(full_code, {}, local_vars)
+            # If we reach here, all assertions passed
+            return {"test_result": "All tests passed successfully."}
+        except AssertionError as e:
+            return {"test_result": f"Test failed: {str(e)}"}
+        except Exception:
+            # Catch other errors, such as syntax errors
+            return {"test_result": f"Error executing the tests: {traceback.format_exc()}"}
+    
+    return {"test_result": "run test functionality only available for python code snippet."}
     
 
 @router.post("/improve_code", response_model=dict)
