@@ -1,5 +1,20 @@
 // Import utility functions from 'utils.js' module
-import { escapeHTML, showLoading, updateCodeClass, validateRunTestVisibility } from './utils.js';
+import { 
+    escapeHTML, showLoading, updateCodeClass, 
+    validateRunTestVisibility, resetData, resetButtons, 
+    sanitizeInput, toggleButtonAttribute, 
+    toggleExtraSection, resetTestResult, setTestResult
+} from './utils.js';
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSnippets();  // Load snippet
+    toggleExtraSection();
+
+    // Event listener for Create New Snippet button
+    document.getElementById("create-snippet-button").addEventListener("click", function() {
+        resetData();
+    });
+});
 
 // Add event listener for language selection changes
 document.getElementById("language").addEventListener("change", function() {
@@ -10,7 +25,7 @@ document.getElementById("language").addEventListener("change", function() {
 
 // Add event listener for generating code
 document.getElementById("generate-button").addEventListener("click", async () => {
-    const description = document.getElementById("description").value;
+    const description = sanitizeInput(document.getElementById("description").value);
     const language = document.getElementById("language").value;
     showLoading(true);  // Show loading animation
 
@@ -26,13 +41,27 @@ document.getElementById("generate-button").addEventListener("click", async () =>
 
     validateRunTestVisibility(language, false);
     updateCodeClass(codeElement, language);
+    saveSnippet(description, language, result.code);
+
+    // reset the data
+    resetButtons();
+    resetTestResult();
+    document.getElementById("feedback").value = "";
+    document.getElementById("test-snippet").innerText = "";
+    document.getElementById("test-feedback").value = "";
+    document.getElementById("test-results").innerText = "";
+    
+    toggleButtonAttribute("improve-code-button", false);
+    toggleButtonAttribute("generate-tests-button", false);
+    toggleExtraSection(false);
+
     showLoading(false);  // Hide loading animation
 });
 
 // Add event listener for improving code
 document.getElementById("improve-code-button").addEventListener("click", async () => {
     const code = document.getElementById("code-snippet").innerText;
-    const feedback = document.getElementById("feedback").value;
+    const feedback = sanitizeInput(document.getElementById("feedback").value);
     const language = document.getElementById("language").value;
     showLoading(true);
 
@@ -65,6 +94,7 @@ document.getElementById("generate-tests-button").addEventListener("click", async
     const result = await response.json();
 
     document.getElementById("test-snippet").innerHTML = escapeHTML(result.code_tests);
+    toggleButtonAttribute("improve-tests-button", false);
     validateRunTestVisibility(language);
     showLoading(false);
 });
@@ -74,7 +104,7 @@ document.getElementById("improve-tests-button").addEventListener("click", async 
     const code = document.getElementById("code-snippet").innerText;
     const language = document.getElementById("language").value;
     const testCases = document.getElementById("test-snippet").innerText;
-    const testFeedback = document.getElementById("test-feedback").value;
+    const testFeedback = sanitizeInput(document.getElementById("test-feedback").value);
     showLoading(true);
 
     const response = await fetch("/improve_tests", {
@@ -105,10 +135,10 @@ document.getElementById("run-tests-button").addEventListener("click", async () =
 
     document.getElementById("test-results").innerText = result.test_result;
     if (result.error === true) {
-        const regenerateButton = document.getElementById("regenerate-button");
-        regenerateButton.disabled = false;
-        regenerateButton.classList.remove("bg-gray-500");
-        regenerateButton.classList.add("bg-teal-500");
+        setTestResult(true);
+        toggleButtonAttribute("regenerate-button", false);
+    } else {
+        setTestResult();
     }
     showLoading(false);
 });
@@ -116,6 +146,7 @@ document.getElementById("run-tests-button").addEventListener("click", async () =
 // Add event listener for regenerating code based on test results
 document.getElementById("regenerate-button").addEventListener("click", async () => {
     const code = document.getElementById("code-snippet").innerText;
+    const description = sanitizeInput(document.getElementById("description").value);
     const feedback = document.getElementById("test-results").innerText;
     const language = document.getElementById("language").value;
     showLoading(true);
@@ -128,11 +159,157 @@ document.getElementById("regenerate-button").addEventListener("click", async () 
     const result = await response.json();
 
     document.getElementById("code-snippet").innerHTML = escapeHTML(result.new_code);
+    saveSnippet(description, language, result.new_code);
 
-    const regenerateButton = document.getElementById("regenerate-button");
-    regenerateButton.disabled = true;
-    regenerateButton.classList.remove("bg-teal-500");
-    regenerateButton.classList.add("bg-gray-500");
-    validateRunTestVisibility(language, false);
+    // reset the data
+    resetButtons();
+    resetTestResult();
+
+    document.getElementById("feedback").value = "";
+    document.getElementById("test-feedback").value = "";
+    document.getElementById("test-results").innerText = "";
+    document.getElementById("test-snippet").innerText = "";
+    toggleButtonAttribute("improve-code-button", false);
+    toggleButtonAttribute("generate-tests-button", false);
+
     showLoading(false);
 });
+
+/**
+ * Resets the styling of all snippets in the list and shows delete buttons.
+ */
+export function resetSnippetList() {
+    const snippetElements = document.querySelectorAll("#snippet-list li a");
+    snippetElements.forEach(el => {
+        el.classList.remove("bg-purple-500", "text-white");
+        el.classList.add("bg-gray-300", "text-black");
+        el.nextElementSibling.style.display = ''; // Show delete button
+    });
+}
+
+/**
+ * Highlights the selected snippet, hiding its delete button.
+ * @param {number} id  - The HTML element representing the snippet to highlight.
+ */s
+export function highlightSnippet(id) {
+    resetSnippetList(); // Reset all snippets to default style
+}
+
+/**
+ * Loads a specific snippet into the code editor based on its ID.
+ * @param {number} id - The ID of the snippet to load.
+ */
+export function loadSnippet(id) {
+    resetSnippetList(); // Reset all snippets to default style
+    const snippets = JSON.parse(localStorage.getItem("snippets") || "[]");
+    const snippet = snippets.find(s => s.id === id);
+
+    if (snippet) {
+        resetData();
+        resetTestResult();
+        const codeElement = document.getElementById("code-snippet");
+        document.getElementById("description").value = snippet.description;
+        document.getElementById("language").value = snippet.language;
+        codeElement.innerHTML = escapeHTML(snippet.code);
+        document.getElementById("description").setAttribute("data-snippet-id", snippet.id);
+        toggleButtonAttribute("improve-code-button", false);
+        toggleButtonAttribute("generate-tests-button", false);
+        toggleExtraSection(false);
+        updateCodeClass(codeElement, snippet.language);
+
+        const snippetElement = document.getElementById(`snippet-${id}`);
+        snippetElement.classList.remove("bg-gray-300", "text-black");
+        snippetElement.classList.add("bg-purple-500", "text-white");
+        document.getElementById(`delete-snippet-${id}`).style.display = 'none'; // Hide delete button
+    } else {
+        console.error(`Snippet with ID ${id} not found.`);
+    }
+}
+
+/**
+ * Loads all snippets from local storage and displays them in the UI.
+ */
+export function loadSnippets() {
+    const snippets = JSON.parse(localStorage.getItem("snippets") || "[]");
+    const list = document.getElementById("snippet-list");
+    list.innerHTML = ''; // Clear existing list
+
+    if (snippets.length === 0) {
+        list.innerHTML = `
+            <li id="no-snippets" class="flex justify-between mb-4">
+                <p>No snippets available.</p>
+            </li>
+        `;
+    } else {
+        snippets.forEach(snippet => {
+            const snippetElement = document.createElement("li");
+            snippetElement.className = "flex justify-between mb-4";
+            snippetElement.innerHTML = `
+                <a id="snippet-${snippet.id}" class="w-full block p-2 bg-gray-300 rounded snippet-link cursor-pointer">
+                    ${snippet.description} | ${snippet.language}
+                </a>
+                <button id="delete-snippet-${snippet.id}" class="bg-red-500 text-white px-2 py-1 rounded delete-button">
+                    Delete
+                </button>
+            `;
+            list.appendChild(snippetElement);
+
+            // Attach event listener for clicking on snippet link
+            const snippetLink = snippetElement.querySelector(`#snippet-${snippet.id}`);
+            snippetLink.addEventListener("click", () => {
+                highlightSnippet(snippet.id);
+                loadSnippet(snippet.id);
+            });
+
+            // Attach event listener for clicking on delete button
+            const deleteButton = snippetElement.querySelector(".delete-button");
+            deleteButton.addEventListener("click", (event) => {
+                event.stopPropagation(); // Prevent link click event from firing
+                deleteSnippet(snippet.id);
+            });
+        });
+    }
+}
+
+/**
+ * Deletes a snippet from local storage based on its ID.
+ * @param {number} id - The ID of the snippet to delete.
+ */
+export function deleteSnippet(id) {
+    let snippets = JSON.parse(localStorage.getItem("snippets") || "[]");
+    snippets = snippets.filter(snippet => snippet.id !== id);
+    localStorage.setItem("snippets", JSON.stringify(snippets));
+
+    // Reload snippet list in UI
+    loadSnippets();
+
+    // Clear editor if deleted snippet was displayed
+    const displayedSnippetId = parseInt(document.getElementById("description").dataset.snippetId);
+    if (displayedSnippetId === id) {
+        document.getElementById("description").value = '';
+        document.getElementById("language").value = 'python'; // Default or reset
+        document.getElementById("code-snippet").textContent = '';
+        document.getElementById("description").removeAttribute("data-snippet-id");
+    }
+}
+
+/**
+ * Saves a new snippet to local storage.
+ * @param {string} description - The description of the new snippet.
+ * @param {string} language - The programming language of the new snippet.
+ * @param {string} code - The code content of the new snippet.
+ */
+export function saveSnippet(description, language, code) {
+    const snippets = JSON.parse(localStorage.getItem("snippets") || "[]");
+    const newSnippet = {
+        id: Date.now(),
+        description,
+        language,
+        code
+    };
+    snippets.push(newSnippet);
+    localStorage.setItem("snippets", JSON.stringify(snippets));
+
+    // Reload snippet list in UI
+    loadSnippets();
+}
