@@ -8,4 +8,6 @@ if [ ! -f .env ]; then
 fi
 export IMAGE_NAME=code-snipper
 docker build -t $IMAGE_NAME .
-docker run --rm -p 8000:8000 --env-file .env $IMAGE_NAME
+
+# Run the Docker container with the Docker socket mounted
+docker run --rm -p 8000:8000 --env-file .env -v /var/run/docker.sock:/var/run/docker.sock $IMAGE_NAME

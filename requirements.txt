@@ -4,3 +4,4 @@ openai
 jinja2
 black
 RestrictedPython
+docker
