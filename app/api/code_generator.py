@@ -7,6 +7,11 @@ from app.models import (
     CodeTestsImproveRequest,
 )
 from app.core.config import client, setup_message, dockerClient
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize the API router from FastAPI
 router = APIRouter()
@@ -15,20 +20,22 @@ router = APIRouter()
 @router.post("/generate_code", response_model=dict)
 async def generate_code(request: CodeRequest):
     """
-    Generates code based on the description provided by the user.
-    Strips any markdown syntax to ensure plain code is returned.
+    Endpoint to generate code based on a description.
+    Returns code that meets the description's requirements.
     """
     description = request.description.strip()
     if not description:
+        logger.error("No description provided for code generation.")
         return {"code": "Please provide the code snippet description!"}
 
     try:
         message = {
             "role": "user",
             "content": (
-                f"Generate a runnable {request.language} code snippet that defines a function, without any comments explaining the function's purpose and logic. "
-                "The function should be directly related to the provided description, without any extraneous messages or comments unrelated to the functionality. "
-                "Also it should not include the test code for the function and no any import of external library."
+                f"Generate a runnable {request.language} code snippet that defines a function, "
+                "without any comments explaining the function's purpose and logic. "
+                "Ensure the function relates directly to the provided description, "
+                "excluding any extraneous messages or comments unrelated to the functionality. "
                 f"Description of the task:\n\n{description}"
             ),
         }
@@ -37,20 +44,22 @@ async def generate_code(request: CodeRequest):
         )
 
         code = response.choices[0].message.content.strip()
+
         # Process to remove Markdown syntax if present
         if code.startswith("```") and code.endswith("```"):
             code = "\n".join(code.split("\n")[1:-1])
 
         return {"code": code}
     except Exception as e:
-        # Capture and send detailed error messages
+        logger.exception("Failed to generate code due to an error.")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/generate_tests", response_model=dict)
 async def generate_tests(request: CodeTestsRequest):
     """
-    Generates test cases for a given code snippet based on the specified language.
+    Endpoint to generate test cases for a given code snippet.
+    Generates a minimum of five test cases based on the specified language.
     """
     try:
         message = {
@@ -71,13 +80,15 @@ async def generate_tests(request: CodeTestsRequest):
         code_tests = response.choices[0].message.content.strip()
         return {"code_tests": code_tests}
     except Exception as e:
+        logger.exception("Failed to generate test cases due to an error.")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/improve_tests", response_model=dict)
 async def improve_tests(request: CodeTestsImproveRequest):
     """
-    Improves existing test cases based on the provided feedback and original test cases.
+    Endpoint to improve existing test cases based on user feedback.
+    Adjusts test cases to better meet the functionality of the provided code snippet.
     """
     try:
         message = {
@@ -99,6 +110,7 @@ async def improve_tests(request: CodeTestsImproveRequest):
         improved_code_tests = response.choices[0].message.content.strip()
         return {"code_tests": improved_code_tests}
     except Exception as e:
+        logger.exception("Failed to improve test cases due to an error.")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -106,8 +118,13 @@ async def improve_tests(request: CodeTestsImproveRequest):
 async def run_tests(request: CodeTestsRunRequest):
     """
     Executes provided test cases for Python code snippets and reports the results.
+    Only supports Python due to the use of a specific Python Docker container for execution.
     """
     if request.language != "python":
+        logger.warning(
+            "Attempted to run tests for unsupported language: %s",
+            request.language,
+        )
         return {
             "test_result": "Run test functionality is only available for Python code snippets.",
             "error": True,
@@ -116,6 +133,7 @@ async def run_tests(request: CodeTestsRunRequest):
     full_code = f"{request.code}\n{request.test_cases}"
     container = None
     try:
+        logger.info("Running Python code in a Docker container")
         # Run the container
         container = dockerClient.containers.run(
             "python:3.11-slim",
@@ -131,28 +149,35 @@ async def run_tests(request: CodeTestsRunRequest):
         output = container.logs()
 
         if result["StatusCode"] == 1:
+            logger.error(
+                "Tests failed with output: %s", output.decode("utf-8")
+            )
             return {"test_result": output.decode("utf-8"), "error": True}
+
+        logger.info("Tests passed successfully")
         return {
             "test_result": "All tests passed successfully.",
             "error": False,
         }
     except Exception as e:
         # Handle exceptions that could occur during container run, wait or fetching logs
+        logger.exception("Failed to run tests due to an error")
         return {"test_result": str(e), "error": True}
     finally:
         # Ensure container is removed if it was created
         if container:
             try:
                 container.remove()
+                logger.info("Docker container removed successfully")
             except Exception as e:
-                # Log this error or handle it as needed
-                print(f"Error removing container: {str(e)}")
+                logger.error("Failed to remove Docker container: %s", str(e))
 
 
 @router.post("/improve_code", response_model=dict)
 async def improve_code(request: FeedbackRequest):
     """
-    Improves the provided code snippet based on user feedback.
+    Improves the provided code snippet based on user feedback focusing on specific issues highlighted.
+    Strips any markdown syntax to return plain code.
     """
     try:
         message = {
@@ -177,15 +202,17 @@ async def improve_code(request: FeedbackRequest):
         if improved_code.startswith("```") and improved_code.endswith("```"):
             improved_code = "\n".join(improved_code.split("\n")[1:-1])
 
+        logger.info("Code improved based on feedback")
         return {"code": improved_code}
     except Exception as e:
+        logger.exception("Failed to improve code due to an error")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/regenerate_code_based_on_tests", response_model=dict)
 async def regenerate_code_based_on_tests(request: FeedbackRequest):
     """
-    Regenerates code based on test results and user feedback.
+    Regenerates the code snippet by incorporating test results and feedback, ensuring it aligns with best practices and addresses noted issues.
     """
     try:
         message = {
@@ -210,6 +237,8 @@ async def regenerate_code_based_on_tests(request: FeedbackRequest):
         if new_code.startswith("```") and new_code.endswith("```"):
             new_code = "\n".join(new_code.split("\n")[1:-1])
 
+        logger.info("Code regenerated based on test results and feedback")
         return {"new_code": new_code}
     except Exception as e:
+        logger.exception("Failed to regenerate code due to an error")
         raise HTTPException(status_code=500, detail=str(e))
